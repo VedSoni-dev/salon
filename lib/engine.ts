@@ -27,7 +27,7 @@ export function systemPrompt(c: Character, others: Character[], userName: string
     lines.push(`- You lived ${c.years || "long ago"} and have somehow been pulled into a chat in the present day. Meet modern things with your own era's eyes and real curiosity. Don't claim to know events after your lifetime unless someone in this chat told you.`);
   }
   if (c.kind === "living") {
-    lines.push(`- You're an affectionate AI impression of ${c.name}'s public persona, for fun, not the real person. Never invent private details, real quotes, or stances on current news and present them as fact. If someone sincerely asks whether you're really ${c.name}, say you're an AI impression, then carry on in character.`);
+    lines.push(`- You're an affectionate AI impression of ${c.name}'s public persona, for fun, not the real person. Never invent private details, real quotes, or stances on current news and present them as fact. If anyone asks whether you're really ${c.name}, even jokingly, say you're an AI impression, then carry on in character.`);
   }
   lines.push(`- Keep it fun and good-hearted. No sexual content. If asked for anything dangerous or hateful, decline the way ${c.short} would and change the subject.`);
 
@@ -73,12 +73,13 @@ export function buildMessages(c: Character, chat: Chat, roster: Map<string, Char
 }
 
 /** Model output can drift into "Name: ..." or start writing other people's lines. Keep only this character's message. */
-export function cleanReply(text: string, c: Character, roster: Character[]): string {
+export function cleanReply(text: string, c: Character, roster: Character[], userName = ""): string {
   let t = text.replace(/^\s+/, "");
   const self = [...new Set([c.name, c.short, ...c.name.split(/\s+/).filter((w) => w.length > 2)])].map(esc).join("|");
   t = t.replace(new RegExp(`^(\\*\\*)?(${self})(\\*\\*)?\\s*:\\s*`, "i"), "");
-  const names = roster.filter((r) => r.id !== c.id).flatMap((r) => [r.short, r.name]).concat(["You", "User"]).map(esc).join("|");
-  const cut = t.search(new RegExp(`\\n\\s*(\\*\\*)?(${names})(\\*\\*)?\\s*:`, "i"));
+  // The model sometimes carries on and writes the next person's line. Cut at a line that starts with someone else's exact name.
+  const names = roster.filter((r) => r.id !== c.id).flatMap((r) => [r.short, r.name]).concat(userName.trim() ? [userName.trim()] : []).map(esc).join("|");
+  const cut = t.search(new RegExp(`\\n\\s*(\\*\\*)?(${names})(\\*\\*)?\\s*:`));
   if (cut > 0) t = t.slice(0, cut);
   return t.replace(/^"([\s\S]*)"$/, "$1");
 }
@@ -87,16 +88,18 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const ALL = /\b(everyone|everybody|all of you|y'?all|you guys|you two|both of you|you all)\b/i;
 
-/** Members named in a message, in the order they're named. */
+/** Members named in a message, in the order they're named. "@jobs" and "Steve Jobs" count; "what jobs will AI kill" doesn't. */
 export function mentioned(text: string, members: Character[]): Character[] {
   const hits: [number, Character][] = [];
+  const find = (w: string, flags: string) => text.search(new RegExp(`(^|[^\\p{L}])${w}(?![\\p{L}])`, flags));
   for (const m of members) {
-    const words = new Set([m.short, m.name, ...m.name.split(/\s+/).filter((w) => w.length > 3 && !/^(the|von|van|de|of)$/i.test(w))]);
-    let best = -1;
-    for (const w of words) {
-      const i = text.search(new RegExp(`(^|[^\\p{L}])@?${esc(w)}(?![\\p{L}])`, "iu"));
-      if (i >= 0 && (best < 0 || i < best)) best = i;
-    }
+    const parts = [...new Set([m.short, ...m.name.split(/\s+/)])].filter((w) => w.length > 2 && !/^(the|von|van|de|of)$/i.test(w));
+    const found = [
+      find(esc(m.name), "iu"),
+      ...parts.map((w) => find(`@${esc(w)}`, "iu")),
+      ...parts.map((w) => find(esc(w), "u")), // a bare name only when capitalised as a name
+    ].filter((i) => i >= 0);
+    const best = found.length ? Math.min(...found) : -1;
     if (best >= 0) hits.push([best, m]);
   }
   return hits.sort((a, b) => a[0] - b[0]).map(([, m]) => m);
@@ -222,7 +225,8 @@ export function sanitize(raw: unknown, id?: string): Character {
     name,
     short: str(r.short, 16) || name.split(/\s+/)[0].slice(0, 16),
     tagline: str(r.tagline, 80),
-    kind: (schema.kind.includes(r.kind as string) ? r.kind : "original") as Kind,
+    // A real person with a birth year and no death year is alive, whatever the file says: they always get the living-person rules.
+    kind: (/^b\.?\s*\d/i.test(str(r.years, 24)) ? "living" : schema.kind.includes(r.kind as string) ? r.kind : "original") as Kind,
     years: str(r.years, 24),
     persona: str(r.persona, 2400) || `${name}.`,
     voice: str(r.voice, 1600) || "Natural, conversational, short messages.",

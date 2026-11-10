@@ -110,13 +110,15 @@ export function seal(c: PublikCredential): string {
 }
 
 export function unseal(value: string | undefined): Sealed | null {
-  if (!value) return null;
+  // Without an app token the cookie key would be a public constant, so accept no cookies at all.
+  if (!value || !available()) return null;
   try {
     const raw = Buffer.from(value, "base64url");
     const decipher = createDecipheriv("aes-256-gcm", secret(), raw.subarray(0, 12));
     decipher.setAuthTag(raw.subarray(12, 28));
     const c = JSON.parse(Buffer.concat([decipher.update(raw.subarray(28)), decipher.final()]).toString("utf8")) as Sealed;
-    return typeof c.key === "string" && c.key.startsWith("pk_") ? c : null;
+    // The server only ever talks to the configured publik base URL, whatever the cookie says.
+    return typeof c.key === "string" && c.key.startsWith("pk_") ? { ...c, base_url: BASE_URL } : null;
   } catch {
     return null;
   }

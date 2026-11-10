@@ -27,6 +27,7 @@ export default function App() {
   const [creator, setCreator] = useState<{ initial?: Character } | null>(null);
   const [profile, setProfile] = useState<Character | null>(null);
   const [adding, setAdding] = useState<string[] | null>(null);
+  const [incoming, setIncoming] = useState<Character | null>(null);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- reading browser storage once, after hydration */
@@ -37,17 +38,12 @@ export default function App() {
       const last = sessionStorage.getItem("salon:active");
       if (last && saved.some((c) => c.id === last)) setActiveId(last);
     } catch { /* private mode */ }
-    const mine = loadCustom();
+    setCustom(loadCustom());
+    // A shared character is shown first and only added if the visitor says so.
     const shared = readShare(location.hash);
     if (shared) {
-      const c = { ...shared, id: `c-${uid()}`, custom: true };
-      const next = [c, ...mine];
-      setCustom(next);
-      saveCustom(next);
-      setProfile(c);
+      setIncoming({ ...shared, id: `c-${uid()}`, custom: true });
       history.replaceState(null, "", location.pathname);
-    } else {
-      setCustom(mine);
     }
     setReady(true);
     /* eslint-enable react-hooks/set-state-in-effect */
@@ -78,7 +74,8 @@ export default function App() {
   const active = chats.find((c) => c.id === activeId) ?? null;
 
   const updateSettings = (s: Settings) => { setSettings(s); saveSettings(s); };
-  const updateChat = useCallback((c: Chat) => setChats((all) => [c, ...all.filter((x) => x.id !== c.id)]), []);
+  // Only chats that still exist: a reply finishing after its chat was deleted must not bring it back.
+  const updateChat = useCallback((c: Chat) => setChats((all) => (all.some((x) => x.id === c.id) ? [c, ...all.filter((x) => x.id !== c.id)] : all)), []);
   const updateCustom = (next: Character[]) => { setCustom(next); saveCustom(next); };
 
   const startChat = (ids: string[]) => {
@@ -97,6 +94,14 @@ export default function App() {
     setDrawer(false);
   };
 
+  // startChat looks characters up in the roster, which doesn't have a just-added character until the next render.
+  const startChatWith = (c: Character) => {
+    const now = Date.now();
+    const chat: Chat = { id: uid(), members: [c.id], createdAt: now, updatedAt: now, messages: [{ id: uid(), from: c.id, text: c.greeting, at: now }] };
+    setChats((all) => [chat, ...all]);
+    setActiveId(chat.id);
+  };
+
   const addPeople = (ids: string[]) => {
     if (!active || !ids.length) return;
     const now = Date.now();
@@ -109,9 +114,14 @@ export default function App() {
   };
 
   const saveCharacter = (c: Character, chat: boolean) => {
+    const existed = custom.some((x) => x.id === c.id);
     updateCustom([c, ...custom.filter((x) => x.id !== c.id)]);
     setCreator(null);
-    if (chat) startChat([c.id]);
+    if (chat) {
+      const dm = existed && chats.find((x) => x.members.length === 1 && x.members[0] === c.id);
+      if (dm) setActiveId(dm.id);
+      else startChatWith(c);
+    }
   };
 
   const deleteCharacter = (c: Character) => {
@@ -207,6 +217,17 @@ export default function App() {
           onEdit={() => { setProfile(null); setCreator({ initial: profile }); }}
           onRemix={() => { setProfile(null); setCreator({ initial: { ...profile, id: `c-${uid()}`, name: profile.name, custom: true } }); }}
           onDelete={() => deleteCharacter(profile)}
+        />
+      )}
+      {incoming && (
+        <Profile
+          c={incoming}
+          incoming
+          onClose={() => setIncoming(null)}
+          onChat={() => { const c = incoming; updateCustom([c, ...custom]); setIncoming(null); startChatWith(c); }}
+          onEdit={() => {}}
+          onRemix={() => {}}
+          onDelete={() => {}}
         />
       )}
       {adding && active && (

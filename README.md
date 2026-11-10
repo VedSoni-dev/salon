@@ -4,7 +4,7 @@
 Talk one-on-one with Einstein, or put Einstein and Joe Rogan in a group chat and watch them argue about time travel. Make any character in one sentence. Free and open source.</p>
 
 <p align="center">
-  <a href="https://salon-chat.vercel.app"><b>Open Salon</b></a> ·
+  <a href="https://salon-gc.vercel.app"><b>Open Salon</b></a> ·
   <a href="#make-your-own-character">Make a character</a> ·
   <a href="#use-it-from-claude-code-or-codex">Use it from your terminal</a> ·
   <a href="#run-it-yourself">Run it yourself</a>

@@ -9,6 +9,8 @@ import type { Character, Chat, Settings } from "@/lib/types";
 import { Avatar, AvatarStack, shade } from "./Avatar";
 import { ErrorBanner, Menu, MenuItem } from "./ui";
 
+type Plan = { kind: "reply"; text: string; speakers?: string[] } | { kind: "talk"; left: number };
+
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((res) => {
     const t = setTimeout(res, ms);
@@ -34,10 +36,13 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
 
   // The newest copy of this chat, readable mid-stream. App keys this view by chat id, so the id never changes here.
   const live = useRef(chat);
+  // Set once the chat is deleted or left, so a stream winding down can't write it back.
+  const gone = useRef(false);
   useEffect(() => {
     if (chat.updatedAt > live.current.updatedAt) live.current = chat;
   }, [chat]);
   const mutate = useCallback((fn: (c: Chat) => Chat) => {
+    if (gone.current) return;
     live.current = { ...fn(live.current), updatedAt: Date.now() };
     onChange(live.current);
   }, [onChange]);
@@ -50,16 +55,22 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
   const [draft, setDraft] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
+  const [retryPlan, setRetryPlan] = useState<Plan | null>(null);
   const abort = useRef<AbortController | null>(null);
-  const [retry, setRetry] = useState<(() => void) | null>(null);
+  /** What's left of the turn in progress, so "Try again" resumes it instead of replaying it. */
+  const progress = useRef<Plan | null>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
 
   // Leaving a chat stops whatever was being said in it.
   useEffect(() => {
+    gone.current = false; // StrictMode runs this effect twice; the first cleanup must not stick.
     input.current?.focus();
-    return () => abort.current?.abort();
+    return () => {
+      gone.current = true;
+      abort.current?.abort();
+    };
   }, []);
 
   useLayoutEffect(() => {
@@ -67,6 +78,7 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
   }, [chat.messages, typing]);
 
+  const checking = settings.provider === "publik" && !publik;
   const needsSetup = settings.provider === "publik" && !!publik && !publik.connected;
 
   const speak = async (c: Character, signal: AbortSignal, autoTurn: boolean) => {
@@ -75,12 +87,13 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
     const id = uid();
     let raw = "";
     let started = false;
+    let ok = false;
     try {
       await streamChat({
         messages, settings, signal, maxTokens: 450, temperature: 0.95,
         onDelta: (t) => {
           raw += t;
-          const text = cleanReply(raw, c, members);
+          const text = cleanReply(raw, c, members, settings.userName);
           if (!text.trim()) return;
           if (!started) {
             started = true;
@@ -92,37 +105,41 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
           }
         },
       });
+      if (!started && !signal.aborted) throw new LLMError("other", `${c.short} didn't answer. Try again.`);
+      ok = true;
     } finally {
       setStreamingId(null);
       setTyping(null);
       if (started) {
-        const text = cleanReply(raw, c, members).trim();
-        mutate((ch) => ({ ...ch, messages: ch.messages.map((m) => (m.id === id ? { ...m, text } : m)) }));
+        const text = cleanReply(raw, c, members, settings.userName).trim();
+        // A reply the user stopped stays as far as it got; one that broke is removed, so a retry starts clean.
+        mutate((ch) => ({
+          ...ch,
+          messages: ok || signal.aborted ? ch.messages.map((m) => (m.id === id ? { ...m, text } : m)) : ch.messages.filter((m) => m.id !== id),
+        }));
       }
     }
   };
 
-  const run = async (fn: (signal: AbortSignal) => Promise<void>, again: () => void) => {
+  const execute = (plan: Plan) => {
     const ac = new AbortController();
     abort.current = ac;
-    setRetry(() => again);
+    progress.current = plan;
+    setRetryPlan(null);
     setBusy(true);
+    setAuto(plan.kind === "talk");
     setError(null);
-    try {
-      await fn(ac.signal);
-    } catch (e) {
-      if (!ac.signal.aborted && (e as Error)?.name !== "AbortError") setError(e as Error);
-    } finally {
-      if (abort.current === ac) abort.current = null;
-      setBusy(false);
-      setAuto(false);
-      setTyping(null);
-    }
-  };
-
-  const respond = (text: string) =>
-    run(async (signal) => {
-      let speakers = quickSpeakers(text, members);
+    pinned.current = true;
+    const work = async (signal: AbortSignal) => {
+      if (plan.kind === "talk") {
+        for (let i = 0; i < plan.left && !signal.aborted; i++) {
+          progress.current = { kind: "talk", left: plan.left - i };
+          if (i) await sleep(500, signal);
+          await speak(nextAuto(live.current, members), signal, true);
+        }
+        return;
+      }
+      let speakers = plan.speakers ? (plan.speakers.map((id) => members.find((m) => m.id === id)).filter(Boolean) as Character[]) : quickSpeakers(plan.text, members);
       if (!speakers) {
         setTyping(members.slice(0, 3));
         try {
@@ -135,31 +152,40 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
         if (!speakers?.length) speakers = [...members].sort(() => Math.random() - 0.5).slice(0, 2);
       }
       for (let i = 0; i < speakers.length && !signal.aborted; i++) {
+        progress.current = { kind: "reply", text: plan.text, speakers: speakers.slice(i).map((m) => m.id) };
         if (i) await sleep(350, signal);
         await speak(speakers[i], signal, false);
       }
-    }, () => respond(text));
+    };
+    work(ac.signal)
+      .catch((e) => {
+        if (!ac.signal.aborted && (e as Error)?.name !== "AbortError") {
+          setError(e as Error);
+          setRetryPlan(progress.current);
+        }
+      })
+      .finally(() => {
+        if (abort.current === ac) abort.current = null;
+        setBusy(false);
+        setAuto(false);
+        setTyping(null);
+      });
+  };
+
+  // "Try again" runs with whatever settings are current then (a key added after the error), not the ones that failed.
+  const latestExecute = useRef(execute);
+  useEffect(() => { latestExecute.current = execute; });
 
   const send = (raw?: string) => {
     const text = (raw ?? draft).trim();
-    if (!text || busy) return;
+    if (!text || busy || checking) return;
     if (needsSetup) { setPending(text); setDraft(text); return; }
     setDraft("");
-    pinned.current = true;
     mutate((c) => ({ ...c, messages: [...c.messages, { id: uid(), from: "user", text, at: Date.now() }] }));
-    respond(text);
+    execute({ kind: "reply", text });
   };
 
-  const letThemTalk = () => {
-    pinned.current = true;
-    setAuto(true);
-    run(async (signal) => {
-      for (let i = 0; i < 4 && !signal.aborted; i++) {
-        if (i) await sleep(500, signal);
-        await speak(nextAuto(live.current, members), signal, true);
-      }
-    }, letThemTalk);
-  };
+  const letThemTalk = () => execute({ kind: "talk", left: 4 });
 
   const connectAndSend = async () => {
     setConnecting(true);
@@ -173,7 +199,7 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
         setDraft("");
         mutate((c) => ({ ...c, messages: [...c.messages, { id: uid(), from: "user", text, at: Date.now() }] }));
         // The fresh cookie is already set; publik state in this closure is stale, so go straight to responding.
-        respond(text);
+        execute({ kind: "reply", text });
       }
     } catch (e) {
       setError(e as Error);
@@ -184,7 +210,11 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
   const stop = () => abort.current?.abort();
 
   useEffect(() => {
-    const k = (e: KeyboardEvent) => { if (e.key === "Escape" && abort.current) abort.current.abort(); };
+    const k = (e: KeyboardEvent) => {
+      // Esc in a dialog or menu closes that, not the reply.
+      if (e.key !== "Escape" || e.defaultPrevented || document.querySelector('[role="dialog"], [aria-expanded="true"]')) return;
+      abort.current?.abort();
+    };
     window.addEventListener("keydown", k);
     return () => window.removeEventListener("keydown", k);
   }, []);
@@ -224,7 +254,7 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
               <MenuItem onClick={() => { close(); onAddPeople(); }}>Add people</MenuItem>
               {members.map((m) => <MenuItem key={m.id} onClick={() => { close(); onViewCharacter(m); }}>About {m.short}</MenuItem>)}
               <MenuItem onClick={() => { close(); stop(); mutate((c) => ({ ...c, messages: group ? [] : c.messages.slice(0, 1).filter((m) => m.from !== "user") })); }}>Clear messages</MenuItem>
-              <MenuItem danger onClick={() => { close(); stop(); onDelete(); }}>Delete chat</MenuItem>
+              <MenuItem danger onClick={() => { close(); gone.current = true; stop(); onDelete(); }}>Delete chat</MenuItem>
             </>
           )}
         </Menu>
@@ -290,7 +320,7 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
         <div className="mx-auto max-w-3xl">
           {error && (
             <div className="mb-3">
-              <ErrorBanner error={error} onDismiss={() => setError(null)} onSettings={onOpenSettings} onRetry={retry ?? undefined} />
+              <ErrorBanner error={error} onDismiss={() => setError(null)} onSettings={onOpenSettings} onRetry={retryPlan ? () => latestExecute.current(retryPlan) : undefined} />
             </div>
           )}
 
@@ -339,7 +369,7 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
                   <svg width="12" height="12" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
                 </button>
               ) : (
-                <button className="btn btn-primary my-1 h-9 w-9 rounded-xl p-0" onClick={() => send()} disabled={!draft.trim()} aria-label="Send">
+                <button className="btn btn-primary my-1 h-9 w-9 rounded-xl p-0" onClick={() => send()} disabled={!draft.trim() || checking} aria-label="Send">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
                 </button>
               )}

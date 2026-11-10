@@ -185,8 +185,10 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
 );
 
 /** A character's card: who they are, and what you can do with them. */
-export function Profile({ c, onClose, onChat, onEdit, onRemix, onDelete }: {
+export function Profile({ c, incoming, onClose, onChat, onEdit, onRemix, onDelete }: {
   c: Character;
+  /** Opened from a share link and not saved yet. */
+  incoming?: boolean;
   onClose: () => void;
   onChat: () => void;
   onEdit: () => void;
@@ -212,6 +214,17 @@ export function Profile({ c, onClose, onChat, onEdit, onRemix, onDelete }: {
         <p>{c.persona}</p>
         <p className="text-mute">{c.voice}</p>
       </div>
+      {incoming ? (
+        <div className="mt-5">
+          <p className="mb-3 rounded-lg bg-sunk px-3 py-2 text-xs leading-relaxed text-mute">
+            Someone shared this character with you{c.kind === "living" ? `. ${c.name} is a real person, so they'll appear as a labelled AI impression` : ""}. Add them to your characters?
+          </p>
+          <div className="flex gap-2">
+            <button className="btn btn-primary" onClick={onChat}>Add and chat with {c.short}</button>
+            <button className="btn" onClick={onClose}>No thanks</button>
+          </div>
+        </div>
+      ) : (
       <div className="mt-5 flex flex-wrap gap-2">
         <button className="btn btn-primary" onClick={onChat}>Chat with {c.short}</button>
         <button className="btn" onClick={() => copy("Link copied", shareUrl(c))}>{copied === "Link copied" ? "Link copied ✓" : "Copy share link"}</button>
@@ -219,9 +232,10 @@ export function Profile({ c, onClose, onChat, onEdit, onRemix, onDelete }: {
         <button className="btn btn-ghost" onClick={() => copy("JSON copied", JSON.stringify({ ...file, id: c.custom ? slugify(c.name) : c.id }, null, 2) + "\n")}>{copied === "JSON copied" ? "JSON copied ✓" : "Copy as file"}</button>
         {c.custom && <button className="btn btn-ghost text-accent" onClick={onDelete}>Delete</button>}
       </div>
-      <p className="mt-4 text-xs leading-relaxed text-mute">
+      )}
+      {!incoming && <p className="mt-4 text-xs leading-relaxed text-mute">
         &ldquo;Copy as file&rdquo; gives you the JSON for <code>characters/</code> in the open-source repo, so you can send {c.short} in as a pull request.
-      </p>
+      </p>}
     </Modal>
   );
 }

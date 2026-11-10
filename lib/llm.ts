@@ -71,11 +71,13 @@ async function sse(res: Response, onEvent: (data: Record<string, unknown>) => vo
       if (!line.startsWith("data:")) continue;
       const data = line.slice(5).trim();
       if (!data || data === "[DONE]") continue;
+      let parsed: Record<string, unknown>;
       try {
-        onEvent(JSON.parse(data));
+        parsed = JSON.parse(data);
       } catch {
-        /* a partial or non-JSON keep-alive line */
+        continue; // a partial or non-JSON keep-alive line
       }
+      onEvent(parsed);
     }
   }
 }

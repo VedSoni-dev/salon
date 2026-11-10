@@ -16,7 +16,7 @@ export function ErrorBanner({ error, onDismiss, onSettings, onRetry }: {
       {(e.kind === "balance" || e.kind === "auth" || e.kind === "no_key" || e.kind === "consent") && (
         <button className="btn" onClick={onSettings}>{e.kind === "balance" ? "Use my own key" : "Open settings"}</button>
       )}
-      {onRetry && e.kind !== "no_key" && e.kind !== "consent" && <button className="btn" onClick={onRetry}>Try again</button>}
+      {onRetry && e.kind !== "no_key" && <button className="btn" onClick={onRetry}>Try again</button>}
       <button className="btn btn-ghost" onClick={onDismiss} aria-label="Dismiss">✕</button>
     </div>
   );
