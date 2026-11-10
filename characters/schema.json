@@ -1,12 +1,72 @@
 {
   "$comment": "The one list of allowed values. The site, the check script and the make-a-character skill all read this file.",
-  "kind": ["historical", "living", "original"],
+  "kind": [
+    "historical",
+    "living",
+    "original"
+  ],
   "avatar": {
-    "hair": ["bald", "buzz", "receding", "short", "sidepart", "pompadour", "wild", "curly", "long", "bob", "bun", "braidcrown", "mohawk"],
-    "facial": ["none", "stubble", "mustache", "walrus", "goatee", "beard", "bigbeard"],
-    "brows": ["normal", "bushy", "unibrow", "arched"],
-    "glasses": ["none", "round", "square", "small"],
-    "outfit": ["tee", "suit", "turtleneck", "toga", "dress", "uniform", "ruff", "coat", "cardigan", "hoodie"],
-    "accessory": ["none", "headphones", "laurel", "circlet", "bicorne", "flowers", "earrings", "pearls", "bowtie", "eyepatch", "beanie"]
+    "hair": [
+      "bald",
+      "buzz",
+      "receding",
+      "short",
+      "sidepart",
+      "pompadour",
+      "wild",
+      "curly",
+      "long",
+      "bob",
+      "bun",
+      "braidcrown",
+      "mohawk"
+    ],
+    "facial": [
+      "none",
+      "stubble",
+      "mustache",
+      "walrus",
+      "goatee",
+      "beard",
+      "bigbeard"
+    ],
+    "brows": [
+      "normal",
+      "bushy",
+      "unibrow",
+      "arched"
+    ],
+    "glasses": [
+      "none",
+      "round",
+      "square",
+      "small"
+    ],
+    "outfit": [
+      "tee",
+      "suit",
+      "turtleneck",
+      "toga",
+      "dress",
+      "uniform",
+      "ruff",
+      "coat",
+      "cardigan",
+      "hoodie"
+    ],
+    "accessory": [
+      "none",
+      "headphones",
+      "laurel",
+      "circlet",
+      "bicorne",
+      "flowers",
+      "earrings",
+      "pearls",
+      "bowtie",
+      "eyepatch",
+      "beanie",
+      "elfears"
+    ]
   }
 }

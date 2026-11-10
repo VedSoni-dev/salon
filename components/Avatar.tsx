@@ -38,8 +38,19 @@ export function Avatar({ spec, size = 40, className, ring }: { spec: AvatarSpec;
         {a.outfit === "hoodie" && <path d="M30 78 C32 64 68 64 70 78" stroke={shade(oc, -0.18)} strokeWidth="6" fill="none" />}
         <path d="M11 101 C12 83 28 73 50 73 C72 73 88 83 89 101Z" fill={oc} />
         <Outfit a={a} neck={skinDark} />
-        <ellipse cx="33" cy="48" rx="3.4" ry="5" fill={skinDark} />
-        <ellipse cx="67" cy="48" rx="3.4" ry="5" fill={skinDark} />
+        {a.accessory === "elfears" ? (
+          <g fill={skinDark}>
+            <path d="M35 42 C24 38 12 34 4 33 C10 40 20 50 35 54Z" />
+            <path d="M65 42 C76 38 88 34 96 33 C90 40 80 50 65 54Z" />
+            <path d="M33 44 C25 41 17 39 11 38 C16 43 23 48 33 51Z" fill={shade(skin, 0.12)} opacity="0.5" />
+            <path d="M67 44 C75 41 83 39 89 38 C84 43 77 48 67 51Z" fill={shade(skin, 0.12)} opacity="0.5" />
+          </g>
+        ) : (
+          <>
+            <ellipse cx="33" cy="48" rx="3.4" ry="5" fill={skinDark} />
+            <ellipse cx="67" cy="48" rx="3.4" ry="5" fill={skinDark} />
+          </>
+        )}
         <ellipse cx="50" cy="46" rx="17" ry="20" fill={skin} />
         {(a.hair === "bald" || a.hair === "receding") && <ellipse cx="44" cy="31" rx="5.5" ry="2.4" fill="#fff" opacity="0.2" />}
         <circle cx="40.5" cy="55" r="3.2" fill="#ff6b6b" opacity="0.13" />

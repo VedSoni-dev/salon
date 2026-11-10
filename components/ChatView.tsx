@@ -360,7 +360,8 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
                 value={draft}
                 onChange={(e) => { setDraft(e.target.value); e.currentTarget.style.height = "auto"; e.currentTarget.style.height = `${Math.min(e.currentTarget.scrollHeight, 160)}px`; }}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
-                placeholder={group ? `Message the group… (@name to ask someone)` : `Message ${members[0]?.short ?? ""}…`}
+                placeholder={group ? "Message the group…" : `Message ${members[0]?.short ?? ""}…`}
+                title={group ? "Tip: @name someone to ask them directly" : undefined}
                 className="max-h-40 min-h-[2.75rem] flex-1 resize-none bg-transparent py-2.5 text-[15px] leading-relaxed outline-none placeholder:text-mute"
                 aria-label="Message"
               />

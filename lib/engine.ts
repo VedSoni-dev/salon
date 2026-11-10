@@ -186,7 +186,7 @@ JSON shape:
   }
 }
 
-The avatar is a flat illustrated portrait. Pick options that capture how they really look or are best remembered: hairline, hair colour, facial hair, glasses, signature clothing, era. For a living person keep everything to their public persona.`,
+The avatar is a flat illustrated portrait. Pick options that capture how they really look or are best remembered: hairline, hair colour, facial hair, glasses, signature clothing, era. Non-human characters can use skin colours like green and "elfears". For a living person keep everything to their public persona.`,
     },
   ];
 }
