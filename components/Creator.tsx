@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { creatorMessages, parseJSONObject, sanitize, shareUrl, slugify } from "@/lib/engine";
-import { complete, publikConnect, type PublikState } from "@/lib/llm";
+import { complete } from "@/lib/llm";
 import { uid } from "@/lib/store";
 import { KINDS, OPTIONS, type AvatarSpec, type Character, type Settings } from "@/lib/types";
 import { Avatar } from "./Avatar";
@@ -29,11 +29,10 @@ const SKINS = ["#f6dcc8", "#f1c9a5", "#e2b48e", "#c98f66", "#a86f4c", "#7a4b31",
 
 const BLANK = (): Character => sanitize({ name: "New character", short: "New", tagline: "", kind: "original", greeting: "Hey! What's on your mind?" }, `c-${uid()}`);
 
-export function Creator({ initial, settings, publik, onPublik, onSave, onClose, onOpenSettings }: {
+export function Creator({ initial, settings, onSave, onClose, onOpenSettings }: {
   initial?: Character;
+  /** Effective settings: provider "publik" when this browser chose its publik plan. */
   settings: Settings;
-  publik: PublikState | null;
-  onPublik: (p: PublikState) => void;
   onSave: (c: Character, chat: boolean) => void;
   onClose: () => void;
   onOpenSettings: () => void;
@@ -43,7 +42,6 @@ export function Creator({ initial, settings, publik, onPublik, onSave, onClose, 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [paste, setPaste] = useState("");
-  const needsSetup = settings.provider === "publik" && !!publik && !publik.connected;
 
   const generate = async (text = desc) => {
     const who = text.trim();
@@ -52,10 +50,6 @@ export function Creator({ initial, settings, publik, onPublik, onSave, onClose, 
     setBusy(true);
     setError(null);
     try {
-      if (needsSetup) {
-        if (!publik?.available) { onOpenSettings(); throw new Error("Add your own OpenAI or Anthropic key in Settings to make characters."); }
-        onPublik(await publikConnect());
-      }
       const out = await complete({ messages: creatorMessages(who), settings, maxTokens: 1400, temperature: 0.7 });
       setDraft({ ...sanitize(parseJSONObject(out), `c-${uid()}`), custom: true });
     } catch (e) {
@@ -93,10 +87,9 @@ export function Creator({ initial, settings, publik, onPublik, onSave, onClose, 
           <div className="mt-2 flex flex-wrap gap-1.5">
             {IDEAS.map((i) => <button type="button" key={i} className="chip" onClick={() => setDesc(i)}>{i}</button>)}
           </div>
-          {needsSetup && publik?.available && <p className="mt-4 rounded-xl border border-line bg-sunk p-3 text-xs leading-relaxed text-mute">{publik.disclosure}</p>}
           {error && <div className="mt-3"><ErrorBanner error={error} onDismiss={() => setError(null)} onSettings={onOpenSettings} onRetry={() => generate()} /></div>}
           <button className="btn btn-primary mt-4 w-full" disabled={busy || !desc.trim()}>
-            {busy ? <><span className="dots" aria-hidden><span /><span /><span /></span> Writing their personality…</> : needsSetup && publik?.available ? "Turn on publik API and make them" : "Make them"}
+            {busy ? <><span className="dots" aria-hidden><span /><span /><span /></span> Writing their personality…</> : "Make them"}
           </button>
         </form>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-mute">

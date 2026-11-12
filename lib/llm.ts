@@ -1,4 +1,3 @@
-import { installId } from "./store";
 import type { Settings } from "./types";
 
 export class LLMError extends Error {
@@ -29,6 +28,13 @@ interface Req {
   onMeta?: (m: Meta) => void;
 }
 
+/** The provider for this browser: publik API when the person chose "Connect your plan" at Sign in with publik
+ *  (or "publik plan" in Settings), else their own OpenAI or Claude key exactly as before. */
+export function effectiveSettings(s: Settings, choice: "publik" | "own_key" | null): Settings {
+  if (choice === "publik") return { ...s, provider: "publik" };
+  return s.provider === "publik" ? { ...s, provider: "openai" } : s;
+}
+
 /** One streaming call, whichever provider the user picked. Own keys go straight from this browser to the provider. */
 export async function streamChat(req: Req): Promise<void> {
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
@@ -49,7 +55,11 @@ export async function streamChat(req: Req): Promise<void> {
 async function fail(res: Response, who: string): Promise<never> {
   const body = await res.json().catch(() => ({}));
   const msg: string = body?.error?.message ?? body?.message ?? `${who} answered ${res.status}.`;
-  if (res.status === 402) throw new LLMError("balance", msg, body?.error?.top_up_url);
+  if (res.status === 402) {
+    // publik's 402: error.message plus its one link, error.top_up_url.
+    const topUp = body?.error?.top_up_url;
+    throw new LLMError("balance", msg, typeof topUp === "string" && topUp.startsWith("https://") ? topUp : undefined);
+  }
   if (res.status === 428) throw new LLMError("consent", msg);
   if (res.status === 401 || res.status === 403) throw new LLMError("auth", `${who} rejected the key. ${msg}`);
   if (res.status === 429) throw new LLMError("rate", `${who} is rate-limiting you. Wait a moment and retry. ${msg}`);
@@ -144,7 +154,7 @@ async function publik({ messages, maxTokens, temperature, settings, signal, onDe
     method: "POST",
     signal,
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ tier: settings.publikTier, messages, max_tokens: maxTokens, temperature }),
+    body: JSON.stringify({ tier: settings.publikTier, messages, max_tokens: maxTokens, temperature, stream: true }),
   });
   const headers: Record<string, string> = {};
   res.headers.forEach((v, k) => {
@@ -158,35 +168,6 @@ async function publik({ messages, maxTokens, temperature, settings, signal, onDe
     const t = c.choices?.[0]?.delta?.content;
     if (t) onDelta(t);
   });
-}
-
-export interface PublikState {
-  /** The server has an app token, so publik API can be offered at all. */
-  available: boolean;
-  /** This browser has a publik key (kept in an http-only cookie, never in page scripts). */
-  connected: boolean;
-  disclosure: string;
-  balanceLine?: string;
-  cost?: string | null;
-  claimUrl?: string | null;
-  addCreditUrl?: string | null;
-  claimState?: "anonymous" | "claimed";
-}
-
-export async function publikStatus(): Promise<PublikState> {
-  const res = await fetch("/api/publik/status", { cache: "no-store" });
-  return res.json();
-}
-
-export async function publikConnect(): Promise<PublikState> {
-  const res = await fetch("/api/publik/provision", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ install_id: installId(), accepted: true }),
-  });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new LLMError("other", body?.error?.message ?? "publik API could not set up this browser. Use your own key for now.");
-  return body;
 }
 
 /** A whole answer as one string, for small structured calls. */

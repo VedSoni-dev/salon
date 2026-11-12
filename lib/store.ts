@@ -5,7 +5,7 @@ const CUSTOM = "salon:characters:v1";
 const SETTINGS = "salon:settings:v1";
 
 export const DEFAULT_SETTINGS: Settings = {
-  provider: "publik",
+  provider: "openai",
   userName: "",
   openaiKey: "",
   openaiModel: "",
@@ -42,20 +42,5 @@ export const saveCustom = (list: Character[]) => write(CUSTOM, list);
 
 export const loadSettings = (): Settings => ({ ...DEFAULT_SETTINGS, ...read<Partial<Settings>>(SETTINGS, {}) });
 export const saveSettings = (s: Settings) => write(SETTINGS, s);
-
-/** A stable id for this browser, used as the publik install id. */
-export function installId(): string {
-  const k = "salon:install";
-  try {
-    let v = localStorage.getItem(k);
-    if (!v) {
-      v = crypto.randomUUID();
-      localStorage.setItem(k, v);
-    }
-    return v;
-  } catch {
-    return crypto.randomUUID();
-  }
-}
 
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);

@@ -1,24 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { listModels, pickDefault, publikConnect, publikStatus, type PublikState } from "@/lib/llm";
-import type { ProviderId, Settings } from "@/lib/types";
+import { effectiveSettings, listModels, pickDefault } from "@/lib/llm";
+import type { Settings } from "@/lib/types";
+import { PublikChoice, usePublik } from "./PublikGate";
 import { Modal } from "./ui";
 
-const TABS: { id: ProviderId; name: string; blurb: string }[] = [
-  { id: "publik", name: "publik API", blurb: "No key to paste" },
+const TABS: { id: "openai" | "anthropic"; name: string; blurb: string }[] = [
   { id: "openai", name: "OpenAI", blurb: "Your own key" },
   { id: "anthropic", name: "Claude", blurb: "Your own key" },
 ];
 
-export function SettingsDialog({ settings, onChange, publik, onPublik, onClose }: {
-  settings: Settings; onChange: (s: Settings) => void; publik: PublikState | null; onPublik: (p: PublikState) => void; onClose: () => void;
+export function SettingsDialog({ settings, onChange, onClose }: {
+  settings: Settings; onChange: (s: Settings) => void; onClose: () => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [models, setModels] = useState<string[]>([]);
   const set = (p: Partial<Settings>) => onChange({ ...settings, ...p });
-  const tab = settings.provider;
+  // publik plan or My own key: the choice from Sign in with publik, changed with <PublikChoice /> below.
+  const { choice } = usePublik();
+  const tab = effectiveSettings(settings, choice).provider;
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true); setNote(null);
@@ -44,7 +46,8 @@ export function SettingsDialog({ settings, onChange, publik, onPublik, onClose }
         <span className="mt-1 block text-xs text-mute">The characters call you this.</span>
       </label>
       <div className="mb-2 text-xs font-medium uppercase tracking-wide text-mute">Where the AI comes from</div>
-      <div className="mb-4 grid grid-cols-3 gap-2" role="tablist">
+      <div className="mb-4 text-sm"><PublikChoice /></div>
+      {tab !== "publik" && <div className="mb-4 grid grid-cols-2 gap-2" role="tablist">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { set({ provider: t.id }); setNote(null); setModels([]); }}
             className={`rounded-xl border px-3 py-2.5 text-left transition ${tab === t.id ? "border-accent bg-accent/10" : "border-line hover:border-mute"}`}>
@@ -52,50 +55,18 @@ export function SettingsDialog({ settings, onChange, publik, onPublik, onClose }
             <div className="text-xs text-mute">{t.blurb}</div>
           </button>
         ))}
-      </div>
+      </div>}
 
       {tab === "publik" && (
         <div className="space-y-3 text-sm">
-          {!publik ? (
-            <div className="shimmer h-24 rounded-xl" />
-          ) : !publik.available && !publik.connected ? (
-            <p className="rounded-xl border border-line bg-sunk p-3 text-mute">
-              publik API isn&apos;t switched on for this build yet. Pick OpenAI or Claude above and paste your own key; it works the same.
-            </p>
-          ) : !publik.connected ? (
-            <>
-              <p className="rounded-xl border border-line bg-sunk p-3 leading-relaxed">{publik.disclosure}</p>
-              <button className="btn btn-primary w-full" disabled={busy} onClick={() => run(async () => onPublik(await publikConnect()))}>
-                {busy ? "Setting up…" : "Turn on publik API"}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="rounded-xl border border-line bg-sunk p-3">
-                <div className="text-base font-semibold">{publik.balanceLine || "publik API is on"}</div>
-                {publik.cost && <p className="mt-1 leading-relaxed text-mute">{publik.cost}</p>}
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {publik.claimState === "claimed" && publik.addCreditUrl ? (
-                    <a className="btn btn-primary" href={publik.addCreditUrl} target="_blank" rel="noreferrer">Add a plan or pack</a>
-                  ) : publik.claimUrl ? (
-                    <a className="btn btn-primary" href={publik.claimUrl} target="_blank" rel="noreferrer">Sign in with publik</a>
-                  ) : null}
-                  <button className="btn" disabled={busy} onClick={() => run(async () => onPublik(await publikStatus()))}>Refresh balance</button>
-                </div>
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-xs text-mute">Model tier</span>
-                <select className="field" value={settings.publikTier} onChange={(e) => set({ publikTier: e.target.value as Settings["publikTier"] })}>
-                  <option value="publik-fast">Fast: cheapest, snappiest replies</option>
-                  <option value="publik-balanced">Balanced: the default</option>
-                  <option value="publik-smart">Smart: strongest, needs a linked publik account</option>
-                </select>
-              </label>
-              <button className="text-xs text-mute underline underline-offset-2" onClick={() => run(async () => { await fetch("/api/publik/provision", { method: "DELETE" }); onPublik(await publikStatus()); })}>
-                Forget this browser&apos;s publik key
-              </button>
-            </>
-          )}
+          <label className="block">
+            <span className="mb-1 block text-xs text-mute">Model tier</span>
+            <select className="field" value={settings.publikTier} onChange={(e) => set({ publikTier: e.target.value as Settings["publikTier"] })}>
+              <option value="publik-fast">Fast: cheapest, snappiest replies</option>
+              <option value="publik-balanced">Balanced: the default</option>
+              <option value="publik-smart">Smart: strongest</option>
+            </select>
+          </label>
         </div>
       )}
 
@@ -140,6 +111,11 @@ export function SettingsDialog({ settings, onChange, publik, onPublik, onClose }
       )}
 
       {note && <p role="status" className={`mt-3 rounded-lg px-3 py-2 text-sm ${note.ok ? "bg-sunk" : "bg-accent/10"}`}>{note.text}</p>}
+      {/* Forget this browser's publik install: the reload opens at Sign in with publik again. */}
+      <button className="mt-4 text-xs text-mute underline underline-offset-2" disabled={busy}
+        onClick={() => run(async () => { await fetch("/api/publik/provision", { method: "DELETE" }); location.reload(); })}>
+        Sign out of publik in this browser
+      </button>
       <button className="btn mt-5 w-full" onClick={onClose}>Done</button>
     </Modal>
   );

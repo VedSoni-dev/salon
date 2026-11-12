@@ -7,16 +7,18 @@ export function ErrorBanner({ error, onDismiss, onSettings, onRetry }: {
   error: LLMError | Error; onDismiss: () => void; onSettings: () => void; onRetry?: () => void;
 }) {
   const e = error as LLMError;
+  // A publik 402: its error.message plus exactly one link, its error.top_up_url. Nothing else.
+  const balance = e.kind === "balance";
   return (
     <div role="alert" className="rise flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-sm">
       <span className="min-w-0 flex-1 basis-60">{e.message}</span>
-      {e.kind === "balance" && e.link && (
-        <a className="btn btn-primary" href={e.link} target="_blank" rel="noreferrer">{e.link.includes("/claim/") ? "Sign in with publik" : "Add credit"}</a>
+      {balance && e.link && (
+        <a className="btn btn-primary" href={e.link} target="_blank" rel="noopener noreferrer">Top up on publik</a>
       )}
-      {(e.kind === "balance" || e.kind === "auth" || e.kind === "no_key" || e.kind === "consent") && (
-        <button className="btn" onClick={onSettings}>{e.kind === "balance" ? "Use my own key" : "Open settings"}</button>
+      {(e.kind === "auth" || e.kind === "no_key" || e.kind === "consent") && (
+        <button className="btn" onClick={onSettings}>Open settings</button>
       )}
-      {onRetry && e.kind !== "no_key" && <button className="btn" onClick={onRetry}>Try again</button>}
+      {onRetry && !balance && e.kind !== "no_key" && <button className="btn" onClick={onRetry}>Try again</button>}
       <button className="btn btn-ghost" onClick={onDismiss} aria-label="Dismiss">✕</button>
     </div>
   );
