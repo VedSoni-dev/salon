@@ -4,25 +4,25 @@
 Talk one-on-one with Einstein, or put Einstein and Joe Rogan in a group chat and watch them argue about time travel. Make any character in one sentence. Free and open source.</p>
 
 <p align="center">
-  <a href="https://salon-gc.vercel.app"><b>Open Salon</b></a> ·
+  <a href="https://salon-gc.vercel.app/app"><b>Open Salon</b></a> ·
   <a href="#make-your-own-character">Make a character</a> ·
   <a href="#use-it-from-claude-code-or-codex">Use it from your terminal</a> ·
   <a href="#run-it-yourself">Run it yourself</a>
 </p>
 
-A free, open-source alternative to Character.AI with group chats built in.
+A free, open-source alternative to Character.AI with group chats built in. [salon-gc.vercel.app](https://salon-gc.vercel.app) is the landing page; the app itself is at [salon-gc.vercel.app/app](https://salon-gc.vercel.app/app).
 
 - **Group chats.** Pick two or more characters and talk to all of them at once. They answer each other, not just you. `@name` someone to ask them directly, or press **Let them talk** and watch the conversation run without you.
 - **14 characters to start:** Albert Einstein, Joe Rogan, Steve Jobs, Cleopatra, Socrates, Frida Kahlo, Nikola Tesla, Marie Curie, Ada Lovelace, Benjamin Franklin, Napoleon, Shakespeare, plus two originals (Gran, and Captain Vex the space pirate).
 - **Portraits that look like them.** Every character gets a flat illustrated portrait built from their real signature features: Einstein's hair and moustache, Frida's unibrow and flower crown, Jobs's turtleneck and round glasses. Drawn as SVG from a dozen parameters, so no image model, no photos and no likeness scraping.
 - **Make anyone in one sentence.** Type "Bob Ross, but secretly competitive" and Salon writes their personality, voice and portrait. Tweak anything, then chat. Share them with a link: the whole character rides in the URL, nothing is stored on a server.
-- **One sign-in, nothing stored on a server.** Salon opens with Sign in with publik; your chats and characters live in your browser.
+- **One sign-in, nothing stored on a server.** The app at `/app` opens with Sign in with publik (the landing page at `/` needs no sign-in); your chats and characters live in your browser.
 
 ## Make your own character
 
 Three ways, easiest first:
 
-1. **On the site:** "Make anyone", describe them, save.
+1. **In the app** (`/app`): "Make anyone", describe them, save.
 2. **With the skill:** in Claude Code or Codex, run the `salon-character` skill (`skills/salon-character/SKILL.md`). It researches the person, writes `characters/<id>.json`, picks a portrait, and runs the checker.
 3. **By hand:** copy `characters/einstein.json`, edit, run `npm run check`.
 
@@ -65,7 +65,7 @@ cp -r salon/skills/* ~/.codex/skills/       # Codex
 
 ## Where the AI comes from
 
-Salon is a [publik](https://publikhq.com) app: it opens with **Sign in with publik**, then asks once how to pay for the AI (change it any time in Settings):
+Salon is a [publik](https://publikhq.com) app. The landing page at `/` is public; the app at `/app` opens with **Sign in with publik**, then asks once how to pay for the AI (change it any time in Settings):
 
 - **Get a plan / Connect your plan**: the characters run on publik API (your messages go through publik to the model), no key to paste, priced per use from your publik plan or balance. Your browser gets its own publik install; its key sits in an encrypted, http-only cookie that only Salon's server can read. If the balance runs out you see publik's message and one top-up link.
 - **Use my own key**: your own OpenAI key (or any OpenAI-compatible endpoint: OpenRouter, Ollama…) or Anthropic key. It stays in your browser and goes straight to the provider.
@@ -87,10 +87,10 @@ How a group chat works: each character gets their own system prompt (persona, vo
 git clone https://github.com/VedSoni-dev/salon
 cd salon
 npm install
-npm run dev     # http://localhost:3000
+npm run dev     # landing page at http://localhost:3000, the app at http://localhost:3000/app
 ```
 
-It opens with Sign in with publik, using the committed `publik-app-token.txt` (public by design: it only mints capped keys for Salon). To check the publik wiring of a build, `npm run build && PUBLIK_SELF_TEST=1 npm start` prints `publik self-test: ok salon 0.1.1` and exits. Deploys to Vercel; set `PUBLIK_COOKIE_SECRET` there (`openssl rand -base64 32`): it encrypts each browser's publik key cookie.
+The app at `/app` opens with Sign in with publik, using the committed `publik-app-token.txt` (public by design: it only mints capped keys for Salon). To check the publik wiring of a build, `npm run build && PUBLIK_SELF_TEST=1 npm start` prints `publik self-test: ok salon 0.1.2` and exits. Deploys to Vercel; set `PUBLIK_COOKIE_SECRET` there (`openssl rand -base64 32`): it encrypts each browser's publik key cookie.
 
 Stack: Next.js (App Router), React, Tailwind, TypeScript. No database.
 
