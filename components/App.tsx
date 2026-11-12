@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BUILT_IN } from "@/characters";
 import { readShare } from "@/lib/engine";
-import { publikStatus, type PublikState } from "@/lib/llm";
+import { effectiveSettings } from "@/lib/llm";
 import { DEFAULT_SETTINGS, loadChats, loadCustom, loadSettings, saveChats, saveCustom, saveSettings, uid } from "@/lib/store";
 import type { Character, Chat, Settings } from "@/lib/types";
 import { AvatarStack } from "./Avatar";
 import { ChatView } from "./ChatView";
 import { Creator, Profile } from "./Creator";
 import { CharacterGrid, Home } from "./Home";
+import { usePublik } from "./PublikGate";
 import { SettingsDialog } from "./Settings";
 import { Logo, Modal } from "./ui";
 
@@ -18,7 +19,6 @@ export const REPO_URL = "https://github.com/VedSoni-dev/salon";
 export default function App() {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [publik, setPublik] = useState<PublikState | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [custom, setCustom] = useState<Character[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -47,7 +47,6 @@ export default function App() {
     }
     setReady(true);
     /* eslint-enable react-hooks/set-state-in-effect */
-    publikStatus().then(setPublik).catch(() => setPublik({ available: false, connected: false, disclosure: "" }));
   }, []);
 
   useEffect(() => {
@@ -68,6 +67,10 @@ export default function App() {
     if (!ready) return;
     try { if (activeId) sessionStorage.setItem("salon:active", activeId); else sessionStorage.removeItem("salon:active"); } catch { /* private mode */ }
   }, [activeId, ready]);
+
+  // Chosen at Sign in with publik ("Connect your plan" or "Use my own key"), changeable in Settings.
+  const { choice } = usePublik();
+  const ai = useMemo(() => effectiveSettings(settings, choice), [settings, choice]);
 
   const roster = useMemo(() => [...custom, ...BUILT_IN], [custom]);
   const rosterMap = useMemo(() => new Map(roster.map((c) => [c.id, c])), [roster]);
@@ -178,7 +181,7 @@ export default function App() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>
             <span className="min-w-0 flex-1 truncate text-left">Settings</span>
             <span className="truncate text-xs font-normal text-mute">
-              {settings.provider === "publik" ? (publik?.connected ? "publik API" : "Not set up") : settings.provider === "openai" ? "OpenAI key" : "Claude key"}
+              {ai.provider === "publik" ? "publik plan" : ai.provider === "openai" ? "OpenAI key" : "Claude key"}
             </span>
           </button>
         </div>
@@ -190,9 +193,7 @@ export default function App() {
             key={active.id}
             chat={active}
             roster={rosterMap}
-            settings={settings}
-            publik={publik}
-            onPublik={setPublik}
+            settings={ai}
             onChange={updateChat}
             onDelete={() => { setChats((all) => all.filter((c) => c.id !== active.id)); setActiveId(null); }}
             onOpenSettings={() => setShowSettings(true)}
@@ -205,9 +206,9 @@ export default function App() {
         )}
       </main>
 
-      {showSettings && <SettingsDialog settings={settings} onChange={updateSettings} publik={publik} onPublik={setPublik} onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsDialog settings={settings} onChange={updateSettings} onClose={() => setShowSettings(false)} />}
       {creator && (
-        <Creator initial={creator.initial} settings={settings} publik={publik} onPublik={setPublik} onSave={saveCharacter} onClose={() => setCreator(null)} onOpenSettings={() => setShowSettings(true)} />
+        <Creator initial={creator.initial} settings={ai} onSave={saveCharacter} onClose={() => setCreator(null)} onOpenSettings={() => setShowSettings(true)} />
       )}
       {profile && (
         <Profile

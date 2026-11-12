@@ -16,7 +16,7 @@ A free, open-source alternative to Character.AI with group chats built in.
 - **14 characters to start:** Albert Einstein, Joe Rogan, Steve Jobs, Cleopatra, Socrates, Frida Kahlo, Nikola Tesla, Marie Curie, Ada Lovelace, Benjamin Franklin, Napoleon, Shakespeare, plus two originals (Gran, and Captain Vex the space pirate).
 - **Portraits that look like them.** Every character gets a flat illustrated portrait built from their real signature features: Einstein's hair and moustache, Frida's unibrow and flower crown, Jobs's turtleneck and round glasses. Drawn as SVG from a dozen parameters, so no image model, no photos and no likeness scraping.
 - **Make anyone in one sentence.** Type "Bob Ross, but secretly competitive" and Salon writes their personality, voice and portrait. Tweak anything, then chat. Share them with a link: the whole character rides in the URL, nothing is stored on a server.
-- **Nothing to sign up for.** Chats and characters live in your browser.
+- **One sign-in, nothing stored on a server.** Salon opens with Sign in with publik; your chats and characters live in your browser.
 
 ## Make your own character
 
@@ -65,7 +65,12 @@ cp -r salon/skills/* ~/.codex/skills/       # Codex
 
 ## Where the AI comes from
 
-The website runs on [publik API](https://publikhq.com) by default: no key to paste, priced per use from a publik balance (linking a publik account gives a little free use). You can switch to your own OpenAI key (or any OpenAI-compatible endpoint: OpenRouter, Ollama…) or your own Anthropic key in Settings; your key stays in your browser and goes straight to the provider.
+Salon is a [publik](https://publikhq.com) app: it opens with **Sign in with publik**, then asks once how to pay for the AI (change it any time in Settings):
+
+- **Get a plan / Connect your plan**: the characters run on publik API (your messages go through publik to the model), no key to paste, priced per use from your publik plan or balance. Your browser gets its own publik install; its key sits in an encrypted, http-only cookie that only Salon's server can read. If the balance runs out you see publik's message and one top-up link.
+- **Use my own key**: your own OpenAI key (or any OpenAI-compatible endpoint: OpenRouter, Ollama…) or Anthropic key. It stays in your browser and goes straight to the provider.
+
+**What usage counting sends.** After sign-in, Salon counts usage for publik with two events: `app_opened` once per browser session, and `active_session` every 30 minutes while a tab is open, each with a random per-browser ID, the app version and your OS. No chat content, characters or names. Browsers that send Do Not Track or Global Privacy Control are never counted.
 
 How a group chat works: each character gets their own system prompt (persona, voice, the other people in the room) and sees the chat from their seat, with their own lines as the assistant's turns and everyone else's labelled by name. Who answers is decided by `@mentions` first, then (for three or more) a small fast model call that picks who'd have the best reaction. See [`lib/engine.ts`](lib/engine.ts).
 
@@ -85,7 +90,7 @@ npm install
 npm run dev     # http://localhost:3000
 ```
 
-It works with no configuration: visitors use their own OpenAI or Anthropic key. To offer publik API, set `PUBLIK_APP_TOKEN` (see [`.env.example`](.env.example)). Deploys to Vercel as-is.
+It opens with Sign in with publik, using the committed `publik-app-token.txt` (public by design: it only mints capped keys for Salon). To check the publik wiring of a build, `npm run build && PUBLIK_SELF_TEST=1 npm start` prints `publik self-test: ok salon 0.1.1` and exits. Deploys to Vercel; set `PUBLIK_COOKIE_SECRET` there (`openssl rand -base64 32`): it encrypts each browser's publik key cookie.
 
 Stack: Next.js (App Router), React, Tailwind, TypeScript. No database.
 

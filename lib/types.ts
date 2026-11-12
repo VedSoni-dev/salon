@@ -57,6 +57,7 @@ export interface Chat {
 export type ProviderId = "publik" | "openai" | "anthropic";
 
 export interface Settings {
+  /** Saved: which own key to use (openai or anthropic). "publik" comes from the Sign in with publik choice (effectiveSettings in lib/llm.ts). */
   provider: ProviderId;
   userName: string;
   openaiKey: string;

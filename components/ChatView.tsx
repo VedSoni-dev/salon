@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { buildMessages, cleanReply, directorMessages, nextAuto, parseDirector, quickSpeakers, userLabel } from "@/lib/engine";
-import { complete, LLMError, publikConnect, streamChat, type PublikState } from "@/lib/llm";
+import { complete, LLMError, streamChat } from "@/lib/llm";
 import { DM_STARTERS, GROUP_STARTERS, PRESETS } from "@/lib/presets";
 import { uid } from "@/lib/store";
 import type { Character, Chat, Settings } from "@/lib/types";
@@ -17,12 +17,11 @@ const sleep = (ms: number, signal: AbortSignal) =>
     signal.addEventListener("abort", () => { clearTimeout(t); res(); }, { once: true });
   });
 
-export function ChatView({ chat, roster, settings, publik, onPublik, onChange, onDelete, onOpenSettings, onOpenMenu, onAddPeople, onViewCharacter }: {
+export function ChatView({ chat, roster, settings, onChange, onDelete, onOpenSettings, onOpenMenu, onAddPeople, onViewCharacter }: {
   chat: Chat;
   roster: Map<string, Character>;
+  /** Effective settings: provider "publik" when this browser chose its publik plan. */
   settings: Settings;
-  publik: PublikState | null;
-  onPublik: (p: PublikState) => void;
   onChange: (c: Chat) => void;
   onDelete: () => void;
   onOpenSettings: () => void;
@@ -53,8 +52,6 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
   const [draft, setDraft] = useState("");
-  const [pending, setPending] = useState<string | null>(null);
-  const [connecting, setConnecting] = useState(false);
   const [retryPlan, setRetryPlan] = useState<Plan | null>(null);
   const abort = useRef<AbortController | null>(null);
   /** What's left of the turn in progress, so "Try again" resumes it instead of replaying it. */
@@ -77,9 +74,6 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
     const el = scroller.current;
     if (el && pinned.current) el.scrollTop = el.scrollHeight;
   }, [chat.messages, typing]);
-
-  const checking = settings.provider === "publik" && !publik;
-  const needsSetup = settings.provider === "publik" && !!publik && !publik.connected;
 
   const speak = async (c: Character, signal: AbortSignal, autoTurn: boolean) => {
     setTyping([c]);
@@ -178,34 +172,13 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
 
   const send = (raw?: string) => {
     const text = (raw ?? draft).trim();
-    if (!text || busy || checking) return;
-    if (needsSetup) { setPending(text); setDraft(text); return; }
+    if (!text || busy) return;
     setDraft("");
     mutate((c) => ({ ...c, messages: [...c.messages, { id: uid(), from: "user", text, at: Date.now() }] }));
     execute({ kind: "reply", text });
   };
 
   const letThemTalk = () => execute({ kind: "talk", left: 4 });
-
-  const connectAndSend = async () => {
-    setConnecting(true);
-    setError(null);
-    try {
-      const state = await publikConnect();
-      onPublik(state);
-      const text = pending;
-      setPending(null);
-      if (text) {
-        setDraft("");
-        mutate((c) => ({ ...c, messages: [...c.messages, { id: uid(), from: "user", text, at: Date.now() }] }));
-        // The fresh cookie is already set; publik state in this closure is stale, so go straight to responding.
-        execute({ kind: "reply", text });
-      }
-    } catch (e) {
-      setError(e as Error);
-    }
-    setConnecting(false);
-  };
 
   const stop = () => abort.current?.abort();
 
@@ -324,29 +297,7 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
             </div>
           )}
 
-          {pending && needsSetup && (
-            <div className="rise mb-3 rounded-2xl border border-accent/40 bg-panel p-4 text-sm">
-              {publik?.available ? (
-                <>
-                  <div className="mb-1 font-semibold">One step before {group ? "they" : members[0]?.short} can reply</div>
-                  <p className="mb-3 leading-relaxed text-mute">{publik.disclosure}</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button className="btn btn-primary" disabled={connecting} onClick={connectAndSend}>{connecting ? "Setting up…" : "Turn on publik API and send"}</button>
-                    <button className="btn" onClick={onOpenSettings}>Use my own key</button>
-                    <button className="btn btn-ghost" onClick={() => setPending(null)}>Cancel</button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mb-1 font-semibold">Add a key to start chatting</div>
-                  <p className="mb-3 leading-relaxed text-mute">This copy of Salon doesn&apos;t have publik API switched on. Paste your own OpenAI or Anthropic key in Settings; it stays in your browser.</p>
-                  <div className="flex gap-2"><button className="btn btn-primary" onClick={onOpenSettings}>Open settings</button><button className="btn btn-ghost" onClick={() => setPending(null)}>Cancel</button></div>
-                </>
-              )}
-            </div>
-          )}
-
-          {fresh && !busy && !pending && (
+          {fresh && !busy && (
             <div className="mb-3 flex gap-2 overflow-x-auto pb-1 scroll-thin">
               {starters.map((s) => <button key={s} className="chip" onClick={() => send(s)}>{s}</button>)}
             </div>
@@ -370,7 +321,7 @@ export function ChatView({ chat, roster, settings, publik, onPublik, onChange, o
                   <svg width="12" height="12" viewBox="0 0 12 12"><rect width="12" height="12" rx="2" fill="currentColor" /></svg>
                 </button>
               ) : (
-                <button className="btn btn-primary my-1 h-9 w-9 rounded-xl p-0" onClick={() => send()} disabled={!draft.trim() || checking} aria-label="Send">
+                <button className="btn btn-primary my-1 h-9 w-9 rounded-xl p-0" onClick={() => send()} disabled={!draft.trim()} aria-label="Send">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
                 </button>
               )}

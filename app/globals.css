@@ -26,6 +26,18 @@
   }
 }
 
+/* Sign in with publik (components/PublikGate.tsx) in Salon's colours */
+:root {
+  --publik-bg: var(--bg);
+  --publik-card: var(--panel);
+  --publik-ink: var(--fg);
+  --publik-muted: var(--mute);
+  --publik-line: var(--line);
+  --publik-accent: var(--accent);
+  --publik-accent-ink: var(--accent-fg);
+  --publik-hover: var(--sunk);
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-panel: var(--panel);
