@@ -255,7 +255,7 @@ export function shareUrl(c: Character): string {
   let bin = "";
   bytes.forEach((b) => (bin += String.fromCharCode(b)));
   const b64 = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-  return `${location.origin}/#c=${b64}`;
+  return `${location.origin}/app#c=${b64}`; // the app lives at /app; / is the public landing page
 }
 
 export function readShare(hash: string): Character | null {
