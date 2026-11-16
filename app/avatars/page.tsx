@@ -1,7 +1,8 @@
 import { BUILT_IN } from "@/characters";
 import { Avatar } from "@/components/Avatar";
 
-export const metadata = { title: "Salon: every portrait" };
+// A dev page for checking portraits; keep it out of search results.
+export const metadata = { title: "Salon: every portrait", robots: { index: false, follow: false } };
 
 /** Every built-in portrait, big. Handy when adding a character: `npm run dev`, then open /avatars. */
 export default function Avatars() {
