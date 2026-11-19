@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { plain } from "./Rich";
 import { BUILT_IN } from "@/characters";
 import { readShare } from "@/lib/engine";
 import { effectiveSettings } from "@/lib/llm";
@@ -166,7 +167,7 @@ export default function App() {
                 <AvatarStack specs={ms.map((m) => m.avatar)} size={34} />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{ms.length > 1 ? ms.map((m) => m.short).join(", ") : ms[0]?.name ?? "Missing character"}</div>
-                  <div className="truncate text-xs text-mute">{last ? who + last.text : "No messages yet"}</div>
+                  <div className="truncate text-xs text-mute">{last ? who + plain(last.text) : "No messages yet"}</div>
                 </div>
               </button>
             );

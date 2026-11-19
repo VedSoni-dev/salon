@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Rich } from "./Rich";
 import { buildMessages, cleanReply, directorMessages, nextAuto, parseDirector, quickSpeakers, userLabel } from "@/lib/engine";
 import { complete, LLMError, streamChat } from "@/lib/llm";
 import { DM_STARTERS, GROUP_STARTERS, PRESETS } from "@/lib/presets";
@@ -270,7 +271,7 @@ export function ChatView({ chat, roster, settings, onChange, onDelete, onOpenSet
                 </div>
                 <div className="min-w-0 max-w-[82%]">
                   {first && group && <div className="mb-0.5 ml-1 text-xs font-semibold" style={{ color }}>{c?.short ?? "Someone"}</div>}
-                  <div className={`whitespace-pre-wrap break-words rounded-2xl rounded-bl-md border border-line bg-panel px-3.5 py-2 text-[15px] leading-relaxed ${streamingId === m.id ? "caret" : ""}`}>{m.text}</div>
+                  <div className={`whitespace-pre-wrap break-words rounded-2xl rounded-bl-md border border-line bg-panel px-3.5 py-2 text-[15px] leading-relaxed ${streamingId === m.id ? "caret" : ""}`}><Rich text={m.text} /></div>
                 </div>
               </div>
             );
