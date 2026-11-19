@@ -1,6 +1,9 @@
 import schema from "@/characters/schema.json";
 import type { Msg } from "./llm";
+import { esc } from "./turns";
 import type { AvatarSpec, Character, Chat, Kind } from "./types";
+
+export { mentioned, nextAuto, quickSpeakers } from "./turns";
 
 export const userLabel = (name: string) => name.trim() || "You";
 
@@ -84,39 +87,6 @@ export function cleanReply(text: string, c: Character, roster: Character[], user
   return t.replace(/^"([\s\S]*)"$/, "$1");
 }
 
-const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-const ALL = /\b(everyone|everybody|all of you|y'?all|you guys|you two|both of you|you all)\b/i;
-
-/** Members named in a message, in the order they're named. "@jobs" and "Steve Jobs" count; "what jobs will AI kill" doesn't. */
-export function mentioned(text: string, members: Character[]): Character[] {
-  const hits: [number, Character][] = [];
-  const find = (w: string, flags: string) => text.search(new RegExp(`(^|[^\\p{L}])${w}(?![\\p{L}])`, flags));
-  for (const m of members) {
-    const parts = [...new Set([m.short, ...m.name.split(/\s+/)])].filter((w) => w.length > 2 && !/^(the|von|van|de|of)$/i.test(w));
-    const found = [
-      find(esc(m.name), "iu"),
-      ...parts.map((w) => find(`@${esc(w)}`, "iu")),
-      ...parts.map((w) => find(esc(w), "u")), // a bare name only when capitalised as a name
-    ].filter((i) => i >= 0);
-    const best = found.length ? Math.min(...found) : -1;
-    if (best >= 0) hits.push([best, m]);
-  }
-  return hits.sort((a, b) => a[0] - b[0]).map(([, m]) => m);
-}
-
-const shuffle = <T,>(xs: T[]) => xs.map((x) => [Math.random(), x] as const).sort((a, b) => a[0] - b[0]).map(([, x]) => x);
-
-/** Who answers the human. Returns null when it's worth asking the model to decide. */
-export function quickSpeakers(text: string, members: Character[]): Character[] | null {
-  if (members.length === 1) return members;
-  if (ALL.test(text)) return shuffle(members).slice(0, 4);
-  const named = mentioned(text, members);
-  if (named.length) return named.slice(0, 4);
-  if (members.length === 2) return shuffle(members);
-  return null;
-}
-
 export function directorMessages(chat: Chat, members: Character[], roster: Map<string, Character>, userName: string): Msg[] {
   const you = userLabel(userName);
   const recent = chat.messages.slice(-10).map((m) => (m.from === "system" ? `(${m.text})` : `${m.from === "user" ? you : roster.get(m.from)?.short ?? "?"}: ${m.text}`)).join("\n");
@@ -133,23 +103,6 @@ export function parseDirector(text: string, members: Character[]): Character[] {
   const ids = [...text.matchAll(/"([a-z0-9-]+)"/g)].map((m) => m[1]);
   const picked = ids.map((id) => members.find((m) => m.id === id)).filter(Boolean) as Character[];
   return [...new Set(picked)].slice(0, 3);
-}
-
-/** Who speaks next when the characters keep talking on their own. */
-export function nextAuto(chat: Chat, members: Character[]): Character {
-  const last = chat.messages[chat.messages.length - 1];
-  const pool = members.filter((m) => m.id !== last?.from);
-  if (last && last.from !== "user" && last.from !== "system") {
-    const named = mentioned(last.text, pool);
-    if (named.length) return named[0];
-  }
-  const lastSpoke = (id: string) => {
-    for (let i = chat.messages.length - 1; i >= 0; i--) if (chat.messages[i].from === id) return i;
-    return -1;
-  };
-  const sorted = [...pool].sort((a, b) => lastSpoke(a.id) - lastSpoke(b.id));
-  // Mostly the quietest, sometimes the second quietest, so it doesn't feel like a rota.
-  return sorted.length > 1 && Math.random() < 0.3 ? sorted[1] : sorted[0] ?? members[0];
 }
 
 // ——— making characters ———
