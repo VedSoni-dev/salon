@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { creatorMessages, parseJSONObject, sanitize, shareUrl, slugify } from "@/lib/engine";
 import { complete } from "@/lib/llm";
 import { uid } from "@/lib/store";
@@ -42,28 +42,36 @@ export function Creator({ initial, settings, onSave, onClose, onOpenSettings }: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<Error | null>(null);
   const [paste, setPaste] = useState("");
+  /** Something here would be lost by closing: a character being written, or one written or edited and not saved. */
+  const unsaved = useRef(false);
+  const close = () => {
+    if (!unsaved.current || confirm(busy ? "Stop making this character?" : "Close without saving this character?")) onClose();
+  };
 
   const generate = async (text = desc) => {
     const who = text.trim();
     if (!who || busy) return;
     setDesc(who);
     setBusy(true);
+    unsaved.current = true;
     setError(null);
     try {
       const out = await complete({ messages: creatorMessages(who), settings, maxTokens: 1400, temperature: 0.7 });
       setDraft({ ...sanitize(parseJSONObject(out), `c-${uid()}`), custom: true });
     } catch (e) {
       setError(e as Error);
+      if (!draft) unsaved.current = false;
     }
     setBusy(false);
   };
 
-  const set = (p: Partial<Character>) => draft && setDraft({ ...draft, ...p });
-  const setLook = (p: Partial<AvatarSpec>) => draft && setDraft({ ...draft, avatar: { ...draft.avatar, ...p } });
+  const set = (p: Partial<Character>) => { if (draft) { unsaved.current = true; setDraft({ ...draft, ...p }); } };
+  const setLook = (p: Partial<AvatarSpec>) => { if (draft) { unsaved.current = true; setDraft({ ...draft, avatar: { ...draft.avatar, ...p } }); } };
 
   const importJSON = () => {
     try {
       setDraft({ ...sanitize(JSON.parse(paste), `c-${uid()}`), custom: true });
+      unsaved.current = true;
       setError(null);
     } catch (e) {
       setError(new Error(e instanceof SyntaxError ? "That isn't valid JSON." : (e as Error).message));
@@ -72,7 +80,7 @@ export function Creator({ initial, settings, onSave, onClose, onOpenSettings }: 
 
   if (!draft) {
     return (
-      <Modal title="Make a character" onClose={onClose}>
+      <Modal title="Make a character" onClose={close}>
         <p className="mb-3 text-sm text-mute">Anyone, real or made up. One line is enough; Salon writes their personality, voice and look.</p>
         <form onSubmit={(e) => { e.preventDefault(); generate(); }}>
           <textarea
@@ -81,7 +89,7 @@ export function Creator({ initial, settings, onSave, onClose, onOpenSettings }: 
             placeholder="e.g. Bob Ross, but he's secretly competitive"
             value={desc}
             onChange={(e) => setDesc(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); generate(); } }}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); generate(); } }}
             maxLength={500}
           />
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -106,7 +114,7 @@ export function Creator({ initial, settings, onSave, onClose, onOpenSettings }: 
 
   const valid = draft.name.trim() && draft.persona.trim();
   return (
-    <Modal title={initial ? `Edit ${initial.short}` : "Your character"} onClose={onClose} wide>
+    <Modal title={initial ? `Edit ${initial.short}` : "Your character"} onClose={close} wide>
       <div className="grid gap-5 sm:grid-cols-[220px_1fr]">
         <div>
           <div className="flex justify-center"><Avatar spec={draft.avatar} size={168} /></div>
@@ -158,7 +166,7 @@ export function Creator({ initial, settings, onSave, onClose, onOpenSettings }: 
       </div>
       {error && <div className="mt-3"><ErrorBanner error={error} onDismiss={() => setError(null)} onSettings={onOpenSettings} /></div>}
       <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-line pt-4">
-        {!initial && <button className="btn btn-ghost" onClick={() => setDraft(null)}>← Start over</button>}
+        {!initial && <button className="btn btn-ghost" onClick={() => { unsaved.current = false; setDraft(null); }}>← Start over</button>}
         {!initial && desc && <button className="btn" disabled={busy} onClick={() => generate()}>{busy ? "Rewriting…" : "Try again"}</button>}
         <div className="flex-1" />
         <button className="btn" disabled={!valid} onClick={() => onSave(clean(draft), false)}>Save</button>

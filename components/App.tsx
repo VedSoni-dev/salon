@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { plain } from "./Rich";
 import { BUILT_IN } from "@/characters";
 import { readShare } from "@/lib/engine";
 import { effectiveSettings } from "@/lib/llm";
-import { DEFAULT_SETTINGS, loadChats, loadCustom, loadSettings, saveChats, saveCustom, saveSettings, uid } from "@/lib/store";
+import { CHATS, CUSTOM, DEFAULT_SETTINGS, SETTINGS, loadChats, loadCustom, loadSettings, saveChats, saveCustom, saveSettings, uid } from "@/lib/store";
+import { mergeChats, sameChats, seenOf, type Seen } from "@/lib/sync";
 import type { Character, Chat, Settings } from "@/lib/types";
 import { AvatarStack } from "./Avatar";
 import { ChatView } from "./ChatView";
@@ -29,11 +30,17 @@ export default function App() {
   const [profile, setProfile] = useState<Character | null>(null);
   const [adding, setAdding] = useState<string[] | null>(null);
   const [incoming, setIncoming] = useState<Character | null>(null);
+  /** The chats as last rendered, for saves that run from timers and page events. */
+  const latest = useRef<Chat[]>([]);
+  /** What storage held the last time this tab read or wrote it. */
+  const seen = useRef<Seen>(new Map());
+  const saving = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     /* eslint-disable react-hooks/set-state-in-effect -- reading browser storage once, after hydration */
     setSettings(loadSettings());
     const saved = loadChats();
+    seen.current = seenOf(saved);
     setChats(saved);
     try {
       const last = sessionStorage.getItem("salon:active");
@@ -50,11 +57,42 @@ export default function App() {
     /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
+  // Every open tab writes the same storage entry, so a save first folds in what other tabs wrote (lib/sync.ts).
+  useEffect(() => { latest.current = chats; }, [chats]);
+  const sync = useCallback((write: boolean) => {
+    const local = latest.current;
+    const stored = loadChats();
+    const merged = mergeChats(local, seen.current, stored);
+    const kept = merged.slice(0, 100);
+    seen.current = seenOf(write && (sameChats(kept, stored) || saveChats(kept)) ? kept : stored);
+    if (!sameChats(merged, local)) setChats(merged);
+  }, []);
+
+  // At most 300 ms behind, also while a reply streams (a timer restarted by every word would never fire).
+  useEffect(() => {
+    if (!ready || saving.current) return;
+    saving.current = setTimeout(() => { saving.current = null; sync(true); }, 300);
+  }, [chats, ready, sync]);
+
   useEffect(() => {
     if (!ready) return;
-    const t = setTimeout(() => saveChats(chats), 300);
-    return () => clearTimeout(t);
-  }, [chats, ready]);
+    // Closing or leaving the tab inside those 300 ms must not lose the last message.
+    const flush = () => { if (document.visibilityState === "hidden") sync(true); };
+    const leave = () => sync(true);
+    const other = (e: StorageEvent) => {
+      if (e.key === CHATS || e.key === null) sync(false);
+      if (e.key === CUSTOM || e.key === null) setCustom(loadCustom());
+      if (e.key === SETTINGS || e.key === null) setSettings(loadSettings());
+    };
+    document.addEventListener("visibilitychange", flush);
+    window.addEventListener("pagehide", leave);
+    window.addEventListener("storage", other);
+    return () => {
+      document.removeEventListener("visibilitychange", flush);
+      window.removeEventListener("pagehide", leave);
+      window.removeEventListener("storage", other);
+    };
+  }, [ready, sync]);
 
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
@@ -129,7 +167,7 @@ export default function App() {
   };
 
   const deleteCharacter = (c: Character) => {
-    if (!confirm(`Delete ${c.name}? Chats with them will lose their messages' avatar.`)) return;
+    if (!confirm(`Delete ${c.name}? Your chats with them stay readable, but they won't answer any more.`)) return;
     updateCustom(custom.filter((x) => x.id !== c.id));
     setProfile(null);
   };
@@ -166,7 +204,7 @@ export default function App() {
                 className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left transition ${c.id === activeId ? "bg-sunk" : "hover:bg-sunk/70"}`}>
                 <AvatarStack specs={ms.map((m) => m.avatar)} size={34} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{ms.length > 1 ? ms.map((m) => m.short).join(", ") : ms[0]?.name ?? "Missing character"}</div>
+                  <div className="truncate text-sm font-medium">{ms.length > 1 ? ms.map((m) => m.short).join(", ") : ms[0]?.name ?? "Deleted character"}</div>
                   <div className="truncate text-xs text-mute">{last ? who + plain(last.text) : "No messages yet"}</div>
                 </div>
               </button>

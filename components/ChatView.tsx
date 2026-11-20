@@ -175,6 +175,7 @@ export function ChatView({ chat, roster, settings, onChange, onDelete, onOpenSet
     const text = (raw ?? draft).trim();
     if (!text || busy) return;
     setDraft("");
+    if (input.current) input.current.style.height = "auto"; // back to one line after a long message
     mutate((c) => ({ ...c, messages: [...c.messages, { id: uid(), from: "user", text, at: Date.now() }] }));
     execute({ kind: "reply", text });
   };
@@ -197,7 +198,9 @@ export function ChatView({ chat, roster, settings, onChange, onDelete, onOpenSet
   const starters = preset?.starters ?? (group ? GROUP_STARTERS : DM_STARTERS);
   const fresh = !chat.messages.some((m) => m.from === "user");
   const living = members.filter((m) => m.kind === "living");
-  const title = group ? members.map((m) => m.short).join(", ") : members[0]?.name ?? "Chat";
+  const title = group ? members.map((m) => m.short).join(", ") : members[0]?.name ?? "Deleted character";
+  // Every character in this chat was deleted: it can be read, but there's nobody to answer.
+  const empty = members.length === 0;
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
@@ -227,7 +230,7 @@ export function ChatView({ chat, roster, settings, onChange, onDelete, onOpenSet
             <>
               <MenuItem onClick={() => { close(); onAddPeople(); }}>Add people</MenuItem>
               {members.map((m) => <MenuItem key={m.id} onClick={() => { close(); onViewCharacter(m); }}>About {m.short}</MenuItem>)}
-              <MenuItem onClick={() => { close(); stop(); mutate((c) => ({ ...c, messages: group ? [] : c.messages.slice(0, 1).filter((m) => m.from !== "user") })); }}>Clear messages</MenuItem>
+              <MenuItem onClick={() => { close(); stop(); setError(null); setRetryPlan(null); mutate((c) => ({ ...c, messages: group ? [] : c.messages.slice(0, 1).filter((m) => m.from !== "user") })); }}>Clear messages</MenuItem>
               <MenuItem danger onClick={() => { close(); gone.current = true; stop(); onDelete(); }}>Delete chat</MenuItem>
             </>
           )}
@@ -298,13 +301,19 @@ export function ChatView({ chat, roster, settings, onChange, onDelete, onOpenSet
             </div>
           )}
 
-          {fresh && !busy && (
+          {empty && (
+            <p className="py-2 text-center text-sm text-mute">
+              The character in this chat was deleted, so nobody can answer. You can still read it, add someone else, or delete it from the ⋯ menu.
+            </p>
+          )}
+
+          {fresh && !busy && !empty && (
             <div className="mb-3 flex gap-2 overflow-x-auto pb-1 scroll-thin">
               {starters.map((s) => <button key={s} className="chip" onClick={() => send(s)}>{s}</button>)}
             </div>
           )}
 
-          <div className="flex items-end gap-2">
+          <div className={empty ? "hidden" : "flex items-end gap-2"}>
             <div className="flex min-w-0 flex-1 items-end rounded-2xl border border-line bg-panel pl-3.5 pr-1.5 focus-within:border-accent">
               <textarea
                 ref={input}

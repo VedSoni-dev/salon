@@ -90,7 +90,7 @@ npm install
 npm run dev     # landing page at http://localhost:3000, the app at http://localhost:3000/app
 ```
 
-The app at `/app` opens with Sign in with publik, using the committed `publik-app-token.txt` (public by design: it only mints capped keys for Salon). To check the publik wiring of a build, `npm run build && PUBLIK_SELF_TEST=1 npm start` prints `publik self-test: ok salon 0.1.2` and exits. Deploys to Vercel; set `PUBLIK_COOKIE_SECRET` there (`openssl rand -base64 32`): it encrypts each browser's publik key cookie.
+The app at `/app` opens with Sign in with publik, using the committed `publik-app-token.txt` (public by design: it only mints capped keys for Salon). To check the publik wiring of a build, `npm run build && PUBLIK_SELF_TEST=1 npm start` prints `publik self-test: ok salon <version>` and exits. Tests: `npm test` (turn-taking and the two-tab merge), and `npm run e2e` against `npm run dev -- -p 4488` for the browser checks (the gate and the model are stubbed, so they cost nothing; needs `npx playwright install chromium`). Deploys to Vercel; set `PUBLIK_COOKIE_SECRET` there (`openssl rand -base64 32`): it encrypts each browser's publik key cookie.
 
 Stack: Next.js (App Router), React, Tailwind, TypeScript. No database.
 

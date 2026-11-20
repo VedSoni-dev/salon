@@ -82,7 +82,8 @@ export function cleanReply(text: string, c: Character, roster: Character[], user
   t = t.replace(new RegExp(`^(\\*\\*)?(${self})(\\*\\*)?\\s*:\\s*`, "i"), "");
   // The model sometimes carries on and writes the next person's line. Cut at a line that starts with someone else's exact name.
   const names = roster.filter((r) => r.id !== c.id).flatMap((r) => [r.short, r.name]).concat(userName.trim() ? [userName.trim()] : []).map(esc).join("|");
-  const cut = t.search(new RegExp(`\\n\\s*(\\*\\*)?(${names})(\\*\\*)?\\s*:`));
+  // With nobody else to name (a one-on-one chat, no name set) the pattern would match any line starting with a colon.
+  const cut = names ? t.search(new RegExp(`\\n\\s*(\\*\\*)?(${names})(\\*\\*)?\\s*:`)) : -1;
   if (cut > 0) t = t.slice(0, cut);
   return t.replace(/^"([\s\S]*)"$/, "$1");
 }
