@@ -1,8 +1,8 @@
 import type { Character, Chat, Settings } from "./types";
 
-const CHATS = "salon:chats:v1";
-const CUSTOM = "salon:characters:v1";
-const SETTINGS = "salon:settings:v1";
+export const CHATS = "salon:chats:v1";
+export const CUSTOM = "salon:characters:v1";
+export const SETTINGS = "salon:settings:v1";
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: "openai",
