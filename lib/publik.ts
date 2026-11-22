@@ -21,7 +21,7 @@ import { platform } from "node:os";
 import type { cookies } from "next/headers";
 
 export const APP_SLUG = "salon";
-export const APP_VERSION = "0.1.6";
+export const APP_VERSION = "0.1.7";
 /** false: the app calls no model. It still signs in and counts users; it skips the plan screen. */
 export const USES_AI = true;
 const ORIGIN = process.env.PUBLIK_ORIGIN || "https://publikhq.com"; // PUBLIK_ORIGIN: tests only
