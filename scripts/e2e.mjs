@@ -263,6 +263,56 @@ await section(async () => {
   await s.context.close();
 }, "8. group chat still works end to end");
 
+// 9. Other sites (ported from Linework). Every request here is refused before it reaches publik, so even a dev
+// server with the real app token sends nothing to publik. The cookies are placeholders this browser "already has".
+await section(async () => {
+  const chatBody = JSON.stringify({ messages: [{ role: "user", content: "hi" }] });
+  const anon = await fetch(`${BASE}/api/publik/chat`, { method: "POST", headers: { "content-type": "application/json" }, body: chatBody });
+  check("a stranger with no publik cookie still gets the old answer, not 403", anon.status === 428, String(anon.status));
+  const xpost = (path, headers, body = "{}") => fetch(BASE + path, { method: "POST", headers: { "content-type": "application/json", ...headers }, body });
+  const xs = [
+    (await xpost("/api/publik/chat", { origin: "null" }, chatBody)).status,
+    (await xpost("/api/publik/chat", { origin: "https://other.vercel.app", "sec-fetch-site": "same-site" }, chatBody)).status,
+    (await xpost("/api/publik/chat", { "sec-fetch-site": "cross-site" }, chatBody)).status,
+    (await xpost("/api/publik/provision", { origin: "https://evil.example" })).status,
+    (await xpost("/api/publik/choice", { origin: "https://evil.example" }, '{"choice":"own_key"}')).status,
+    (await xpost("/api/publik/telemetry", { origin: "null" }, '{"event":"app_opened"}')).status,
+    (await fetch(`${BASE}/api/publik/provision`, { method: "DELETE", headers: { origin: "https://evil.example" } })).status,
+  ];
+  check("Origin null, another subdomain, Sec-Fetch-Site cross-site, and another site on every POST/DELETE route: 403", xs.every((x) => x === 403), xs.join(" "));
+
+  const context = await browser.newContext();
+  const host = new URL(BASE).hostname;
+  await context.addCookies([
+    { name: "salon-publik", value: "placeholder-install", domain: host, path: "/", httpOnly: true, sameSite: "Lax" },
+    { name: "salon-publik-choice", value: "publik", domain: host, path: "/", httpOnly: true, sameSite: "Lax" },
+  ]);
+  await context.route("http://evil.test/**", (r) => r.fulfill({ contentType: "text/html", body: r.request().url().endsWith("/a")
+    ? `<form id=f method=post action="${BASE}/api/publik/provision"></form><script>f.submit()</script>`
+    : `<form id=f method=post enctype="text/plain" action="${BASE}/api/publik/choice"><input name='{"choice":"own_key","x":"' value='"}'></form><script>f.submit()</script>` }));
+  const evil = await context.newPage();
+  const seen = [];
+  evil.on("response", (r) => { if (r.url().startsWith(BASE)) seen.push(r.status()); });
+  for (const u of ["http://evil.test/a", "http://evil.test/b"]) {
+    await evil.goto(u);
+    await evil.waitForURL((x) => x.toString().startsWith(BASE), { timeout: 10_000 }).catch(() => {});
+    await evil.waitForTimeout(300);
+  }
+  check("a real form on another site gets 403 from provision and choice", seen.length === 2 && seen.every((s) => s === 403), seen.join(" "));
+  const jar = Object.fromEntries((await context.cookies(BASE)).map((c) => [c.name, c.value]));
+  check("a form on another site can't replace this browser's install or switch it to My own key", jar["salon-publik"] === "placeholder-install" && jar["salon-publik-choice"] === "publik", JSON.stringify(jar));
+  // Salon itself still reaches its routes from the same browser (same origin passes the check).
+  const page = await context.newPage();
+  await page.goto(`${BASE}/`);
+  const same = await page.evaluate(async () => {
+    const choice = await fetch("/api/publik/choice", { method: "POST", headers: { "content-type": "application/json" }, body: '{"choice":"publik"}' });
+    const chat = await fetch("/api/publik/chat", { method: "POST", headers: { "content-type": "application/json" }, body: '{"messages":[{"role":"user","content":"hi"}]}' });
+    return [choice.status, chat.status];
+  });
+  check("from Salon itself the same routes pass the check (choice 200; chat 428 for a placeholder install, not 403)", same[0] === 200 && same[1] === 428, same.join(" "));
+  await context.close();
+}, "9. other sites");
+
 await browser.close();
 const failed = results.filter((r) => !r.ok);
 console.log(`\n${results.length - failed.length}/${results.length} passed`);

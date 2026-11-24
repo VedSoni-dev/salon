@@ -1,6 +1,6 @@
 {
   "name": "salon",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,7 @@
     "lint": "eslint",
     "check": "node scripts/check-characters.mjs",
     "prebuild": "node scripts/check-characters.mjs",
-    "test": "node --test scripts/test-turns.mjs scripts/test-sync.mjs",
+    "test": "node --test scripts/test-turns.mjs scripts/test-sync.mjs scripts/test-origin.mjs",
     "e2e": "node scripts/e2e.mjs"
   },
   "dependencies": {

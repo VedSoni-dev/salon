@@ -80,6 +80,7 @@ How a group chat works: each character gets their own system prompt (persona, vo
 - Real living people (like Joe Rogan) are labelled as an AI impression everywhere they appear, and their prompt rules out invented private details, fake quotes and stances on current news.
 - Chats are stored in your browser only. Clear your site data and they're gone; there's no sync between devices yet.
 - No voice yet.
+- Other sites can't use your sign-in: every POST and DELETE route answers 403 to a request from another site, another subdomain or Origin `null`, so a form elsewhere can't sign you out, mint a stray install or switch you to your own key.
 
 ## Run it yourself
 
@@ -90,7 +91,7 @@ npm install
 npm run dev     # landing page at http://localhost:3000, the app at http://localhost:3000/app
 ```
 
-The app at `/app` opens with Sign in with publik, using the committed `publik-app-token.txt` (public by design: it only mints capped keys for Salon). To check the publik wiring of a build, `npm run build && PUBLIK_SELF_TEST=1 npm start` prints `publik self-test: ok salon <version>` and exits. Tests: `npm test` (turn-taking and the two-tab merge), and `npm run e2e` against `npm run dev -- -p 4488` for the browser checks (the gate and the model are stubbed, so they cost nothing; needs `npx playwright install chromium`). Deploys to Vercel; set `PUBLIK_COOKIE_SECRET` there (`openssl rand -base64 32`): it encrypts each browser's publik key cookie.
+The app at `/app` opens with Sign in with publik, using the committed `publik-app-token.txt` (public by design: it only mints capped keys for Salon). To check the publik wiring of a build, `npm run build && PUBLIK_SELF_TEST=1 npm start` prints `publik self-test: ok salon <version>` and exits. Tests: `npm test` (turn-taking and the two-tab merge), and `npm run e2e` against `npm run dev -- -p 4488` for the browser checks (22 checks, including other sites getting 403; the gate and the model are stubbed, so they cost nothing; needs `npx playwright install chromium`). Deploys to Vercel; set `PUBLIK_COOKIE_SECRET` there (`openssl rand -base64 32`): it encrypts each browser's publik key cookie.
 
 Stack: Next.js (App Router), React, Tailwind, TypeScript. No database.
 
