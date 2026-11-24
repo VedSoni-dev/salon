@@ -2,6 +2,7 @@
 // OpenAI or Anthropic (lib/llm.ts). This route runs only for a browser that chose "Connect your plan".
 import { cookies } from "next/headers";
 import { MODELS, TIERS, resolveProvider } from "@/lib/publik";
+import { forbidden, foreignOrigin } from "@/lib/origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,7 @@ type Msg = { role: "system" | "user" | "assistant"; content: string };
 /** One publik API chat completion with this browser's install key: { tier?, messages, max_tokens?, temperature?, stream? }.
  *  Streams (text/event-stream) when stream is true. A 402 passes through untouched: error.message plus error.top_up_url. */
 export async function POST(req: Request) {
+  if (foreignOrigin(req)) return forbidden();
   const p = resolveProvider(await cookies(), null);
   if (p.kind !== "publik") {
     return Response.json({ error: { message: "This browser uses its own key. Pick publik plan in Settings to use publik API." } }, { status: 428 });

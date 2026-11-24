@@ -23,4 +23,5 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - Self-test: `npm run build && PUBLIK_SELF_TEST=1 npm run start` prints `publik self-test: ok <slug> <version>` (instrumentation.ts)
 - 402: show error.message plus error.top_up_url only
 - Never print or log a key
+- Every POST/DELETE route starts with `if (foreignOrigin(req)) return forbidden();` (`lib/origin.ts`): another site, another subdomain, or Origin "null" gets 403. Keep it on any new route that spends credit or changes the cookies
 - Docs: https://publikhq.com/llms.txt, https://publikhq.com/developers, https://publikhq.com/skills/api.md
